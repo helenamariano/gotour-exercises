@@ -5,8 +5,8 @@ import "fmt"
 // fibonacci is a function that returns
 // a function that returns an int.
 func fibonacci() func() int {
-	FnMinus1 := 1
-	FnMinus2 := 0
+	fibNMinus1 := 1
+	fibNMinus2 := 0
 	n := 0
 
 	return func() int {
@@ -18,10 +18,10 @@ func fibonacci() func() int {
 			return n
 		}
 
-		Fn := FnMinus1 + FnMinus2
-		FnMinus2 = FnMinus1
-		FnMinus1 = Fn
-		return Fn
+		fibN := fibNMinus1 + fibNMinus2
+		fibNMinus2 = fibNMinus1
+		fibNMinus1 = fibN
+		return fibN
 	}
 }
 
