@@ -9,22 +9,22 @@ import (
 
 // Walk walks the tree t sending all values
 // from the tree to the channel ch.
-func Walk(t *tree.Tree, ch chan<- int, done <-chan bool) {
-	doWalk(t, ch, done)
+func Walk(t *tree.Tree, ch chan<- int, stop <-chan bool) {
+	doWalk(t, ch, stop)
 	close(ch)
 }
 
-func doWalk(t *tree.Tree, ch chan<- int, done <-chan bool) {
+func doWalk(t *tree.Tree, ch chan<- int, stop <-chan bool) {
 	if t.Left != nil {
-		doWalk(t.Left, ch, done)
+		doWalk(t.Left, ch, stop)
 	}
 	select {
 	case ch <- t.Value:
-	case <-done:
+	case <-stop:
 		return
 	}
 	if t.Right != nil {
-		doWalk(t.Right, ch, done)
+		doWalk(t.Right, ch, stop)
 	}
 }
 
@@ -33,11 +33,11 @@ func doWalk(t *tree.Tree, ch chan<- int, done <-chan bool) {
 func Same(t1, t2 *tree.Tree) bool {
 	ch1 := make(chan int)
 	ch2 := make(chan int)
-	done := make(chan bool)
-	defer close(done)
+	stop := make(chan bool)
+	defer close(stop)
 
-	go Walk(t1, ch1, done)
-	go Walk(t2, ch2, done)
+	go Walk(t1, ch1, stop)
+	go Walk(t2, ch2, stop)
 
 	for {
 		v1, ok1 := <-ch1
