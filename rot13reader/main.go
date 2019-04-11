@@ -22,14 +22,13 @@ type rot13Reader struct {
 }
 
 func (rr *rot13Reader) Read(b []byte) (n int, err error) {
-	in := make([]byte, len(b))
-	n, err = rr.r.Read(in)
+	n, err = rr.r.Read(b)
 	if err != nil {
 		return n, err
 	}
 
 	for i := 0; i < n; i++ {
-		b[i] = rot13(in[i])
+		b[i] = rot13(b[i])
 	}
 	return n, nil
 }
