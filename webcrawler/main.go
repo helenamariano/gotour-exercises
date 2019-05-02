@@ -12,21 +12,8 @@ type Fetcher interface {
 }
 
 type Crawler struct {
-	Seen map[string]bool
-	sync.Mutex
-}
-
-func (c *Crawler) seen(url string) bool {
-	c.Lock()
-	_, exists := c.Seen[url]
-	c.Unlock()
-	return exists
-}
-
-func (c *Crawler) add(url string) {
-	c.Lock()
-	c.Seen[url] = true
-	c.Unlock()
+	seen map[string]error
+	sync.RWMutex
 }
 
 // Crawl uses fetcher to recursively crawl
@@ -43,15 +30,24 @@ func (c *Crawler) Crawl(url string, depth int, fetcher Fetcher) {
 			return
 		}
 
-		if c.seen(url) {
+		c.Lock()
+		if _, ok := c.seen[url]; ok {
+			c.Unlock()
 			fmt.Printf("already seen: %s\n", url)
 			return
 		}
 
-		c.add(url)
+		c.seen[url] = nil
+		c.Unlock()
+
 		body, urls, err := fetcher.Fetch(url)
 		fmt.Printf("found: %s %q\n", url, body)
+
 		if err != nil {
+			c.Lock()
+			c.seen[url] = err
+			c.Unlock()
+
 			fmt.Println(err)
 			return
 		}
@@ -64,7 +60,7 @@ func (c *Crawler) Crawl(url string, depth int, fetcher Fetcher) {
 }
 
 func NewCrawler() *Crawler {
-	return &Crawler{Seen: make(map[string]bool)}
+	return &Crawler{seen: make(map[string]error)}
 }
 
 func main() {
@@ -101,8 +97,11 @@ var fetcher = fakeFetcher{
 		[]string{
 			"https://golang.org/",
 			"https://golang.org/cmd/",
+
 			"https://golang.org/pkg/fmt/",
 			"https://golang.org/pkg/os/",
+			"https://golang.org/pkg/sync/",
+			"https://golang.org/pkg/atomic/",
 		},
 	},
 	"https://golang.org/pkg/fmt/": &fakeResult{
