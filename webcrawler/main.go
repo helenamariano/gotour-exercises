@@ -12,60 +12,74 @@ type Fetcher interface {
 }
 
 type Crawler struct {
-	seen map[string]error
-	sync.RWMutex
+	seen         map[string]error
+	sync.RWMutex     // protects seen
+	limit        int // stops crawling when number urls seen reaches limit
 }
 
 // Crawl uses fetcher to recursively crawl
 // pages starting with url, to a maximum of depth.
-func (c *Crawler) Crawl(url string, depth int, fetcher Fetcher) {
-	done := make(chan bool)
+func (c *Crawler) Crawl(wg *sync.WaitGroup, url string, depth int, fetcher Fetcher) {
+	defer wg.Done()
 
-	go func() {
-		defer func() {
-			done <- true
-		}()
+	if depth <= 0 {
+		return
+	}
 
-		if depth <= 0 {
-			return
-		}
+	c.Lock()
+	if _, ok := c.seen[url]; ok {
+		c.Unlock()
+		fmt.Printf("already seen: %s\n", url)
+		return
+	}
 
+	c.seen[url] = nil
+	c.Unlock()
+
+	body, urls, err := fetcher.Fetch(url)
+	fmt.Printf("found: %s %q\n", url, body)
+
+	if err != nil {
 		c.Lock()
-		if _, ok := c.seen[url]; ok {
-			c.Unlock()
-			fmt.Printf("already seen: %s\n", url)
-			return
-		}
-
-		c.seen[url] = nil
+		c.seen[url] = err
 		c.Unlock()
 
-		body, urls, err := fetcher.Fetch(url)
-		fmt.Printf("found: %s %q\n", url, body)
+		fmt.Println(err)
+		return
+	}
 
-		if err != nil {
-			c.Lock()
-			c.seen[url] = err
-			c.Unlock()
-
-			fmt.Println(err)
+	for _, u := range urls {
+		c.RLock()
+		if len(c.seen) >= c.limit {
+			c.RUnlock()
+			fmt.Printf("limit of %d urls reached\n", c.limit)
 			return
 		}
+		c.RUnlock()
 
-		for _, u := range urls {
-			c.Crawl(u, depth-1, fetcher)
-		}
-	}()
-	<-done
+		wg.Add(1)
+		go func(url string) {
+			c.Crawl(wg, url, depth-1, fetcher)
+		}(u)
+	}
 }
 
-func NewCrawler() *Crawler {
-	return &Crawler{seen: make(map[string]error)}
+func NewCrawler(limit int) *Crawler {
+	c := &Crawler{
+		seen:  make(map[string]error),
+		limit: limit,
+	}
+	return c
 }
 
 func main() {
-	c := NewCrawler()
-	c.Crawl("https://golang.org/", 4, fetcher)
+	c := NewCrawler(1000)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		c.Crawl(&wg, "https://golang.org/", 4, fetcher)
+	}()
+	wg.Wait()
 }
 
 // fakeFetcher is Fetcher that returns canned results.
